@@ -3,11 +3,13 @@
 #include "TempCapstoneProjectCharacter.h"
 #include "HeadMountedDisplayFunctionLibrary.h"
 #include "Camera/CameraComponent.h"
+#include "Components/BoxComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/InputComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/Controller.h"
 #include "GameFramework/SpringArmComponent.h"
+#include "InteractionInterface.h"
 
 //////////////////////////////////////////////////////////////////////////
 // ATempCapstoneProjectCharacter
@@ -45,6 +47,9 @@ ATempCapstoneProjectCharacter::ATempCapstoneProjectCharacter()
 
 	// Note: The skeletal mesh and anim blueprint references on the Mesh component (inherited from Character) 
 	// are set in the derived blueprint asset named MyCharacter (to avoid direct content references in C++)
+
+	InteractionBox = CreateDefaultSubobject<UBoxComponent>(TEXT("Interaction Box"));
+	InteractionBox->SetupAttachment(RootComponent);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -74,8 +79,62 @@ void ATempCapstoneProjectCharacter::SetupPlayerInputComponent(class UInputCompon
 
 	// VR headset functionality
 	PlayerInputComponent->BindAction("ResetVR", IE_Pressed, this, &ATempCapstoneProjectCharacter::OnResetVR);
+
+	// Interact with objects
+	PlayerInputComponent->BindAction("Interact", IE_Pressed, this, &ATempCapstoneProjectCharacter::OnInteract);
 }
 
+void ATempCapstoneProjectCharacter::BeginPlay()
+{
+    Super::BeginPlay();
+}
+
+void ATempCapstoneProjectCharacter::Tick(float DeltaSeconds)
+{
+    Super::Tick(DeltaSeconds);
+
+	CheckInteraction();
+}
+
+void ATempCapstoneProjectCharacter::OnInteract()
+{
+	if (Interface)
+	    Interface->InteractWithMe();
+}
+
+void ATempCapstoneProjectCharacter::CheckInteraction()
+{
+	TArray<AActor*>OverlappingActors;
+	InteractionBox->GetOverlappingActors(OverlappingActors);
+
+	if (OverlappingActors.Num() == 0)
+	{
+		if (Interface)
+		{
+			Interface->HideInteractionWidget();
+			Interface = nullptr;
+		}
+		return;
+	}
+
+	AActor* ClosestActor = OverlappingActors[0];
+
+	for (auto CurrentActor : OverlappingActors)
+	{
+		if (GetDistanceTo(CurrentActor) < GetDistanceTo(ClosestActor))
+		{
+			ClosestActor = CurrentActor;
+		}
+	}
+
+	if (Interface)
+		Interface->HideInteractionWidget();
+
+	Interface = Cast<IInteractionInterface>(ClosestActor);
+
+	if (Interface)
+		Interface->ShowInteractionWidget();
+}
 
 void ATempCapstoneProjectCharacter::OnResetVR()
 {
